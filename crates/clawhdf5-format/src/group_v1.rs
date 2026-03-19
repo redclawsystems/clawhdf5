@@ -123,9 +123,9 @@ pub fn resolve_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::btree_v1::BTreeV1Node;
 
     // Helper to write an offset value into a buffer
+    #[allow(dead_code)]
     fn write_off(buf: &mut Vec<u8>, val: u64, size: u8) {
         match size {
             4 => buf.extend_from_slice(&(val as u32).to_le_bytes()),
@@ -327,7 +327,7 @@ mod tests {
 
     // Helper to extract dataset components from an object header
     fn extract_dataset(
-        file_data: &[u8],
+        _file_data: &[u8],
         hdr: &crate::object_header::ObjectHeader,
         offset_size: u8,
         length_size: u8,

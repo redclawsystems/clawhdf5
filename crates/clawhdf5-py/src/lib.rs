@@ -43,7 +43,6 @@ pub(crate) fn to_py_err(e: clawhdf5_rs::Error) -> PyErr {
         | Error::ZeroCopyUnaligned { .. } => {
             PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
         }
-        _ => PyErr::new::<pyo3::exceptions::PyOSError, _>(e.to_string()),
     }
 }
 

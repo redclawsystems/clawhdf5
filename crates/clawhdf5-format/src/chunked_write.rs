@@ -1027,7 +1027,7 @@ mod tests {
 
     #[test]
     fn chunk_addresses_are_cache_aligned() {
-        use super::{CACHE_LINE_SIZE, align_chunk_offset};
+        use super::align_chunk_offset;
         let values: Vec<f64> = (0..100).map(|i| i as f64).collect();
         let raw = f64_to_bytes(&values);
         let base_address = 0x1000u64;
@@ -1356,7 +1356,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn h5py_reads_multiple_chunked_datasets() {
-        use crate::file_writer::{AttrValue, FileWriter};
+        use crate::file_writer::FileWriter;
         let mut fw = FileWriter::new();
         let data1: Vec<f64> = (0..50).map(|i| i as f64).collect();
         let data2: Vec<f64> = (0..30).map(|i| (i * 10) as f64).collect();

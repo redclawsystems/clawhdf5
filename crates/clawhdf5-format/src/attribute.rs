@@ -409,7 +409,6 @@ fn extract_dense_attributes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datatype::{CharacterSet, DatatypeByteOrder, StringPadding};
 
     /// Build a datatype header for testing (8 bytes).
     fn build_dt_header(class: u8, version: u8, bf: [u8; 3], size: u32) -> Vec<u8> {

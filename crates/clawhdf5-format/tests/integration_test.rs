@@ -1,7 +1,7 @@
 use clawhdf5_format::attribute::{extract_attributes, extract_attributes_full, find_attribute};
 use clawhdf5_format::data_layout::DataLayout;
 use clawhdf5_format::data_read::{
-    read_as_f32, read_as_f64, read_as_i32, read_as_i64, read_as_strings, read_as_u64,
+    read_as_f32, read_as_f64, read_as_i32, read_as_i64,
     read_raw_data, read_raw_data_full,
 };
 use clawhdf5_format::dataspace::Dataspace;

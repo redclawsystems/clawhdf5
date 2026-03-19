@@ -91,7 +91,7 @@ fn nearest_centroid_bench(vector: &[f32], centroids: &[f32], num_clusters: usize
     for c in 0..num_clusters {
         let centroid = &centroids[c * dim..(c + 1) * dim];
         let cnorm = vector_search::compute_norm(centroid);
-        let sim = zeroclaw_memory::cosine_similarity_prenorm(vector, vnorm, centroid, cnorm);
+        let sim = clawhdf5_agent::cosine_similarity_prenorm(vector, vnorm, centroid, cnorm);
         if sim > best_sim {
             best_sim = sim;
             best = c;
@@ -261,7 +261,7 @@ fn ivf_pq_benches(c: &mut Criterion) {
         .enumerate()
         .map(|(c, list)| {
             list.iter()
-                .map(|&idx| zeroclaw_memory::ivf::SharedEntry {
+                .map(|&idx| clawhdf5_agent::ivf::SharedEntry {
                     vector_idx: idx,
                     primary_list: c,
                 })

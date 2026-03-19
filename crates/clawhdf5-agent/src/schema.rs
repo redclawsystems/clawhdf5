@@ -474,6 +474,7 @@ fn load_knowledge_group(file: &clawhdf5::File) -> Result<KnowledgeCache, MemoryE
                 name: entity_names[i].clone(),
                 entity_type: entity_types[i].clone(),
                 embedding_idx: emb_idxs[i],
+                ..Default::default()
             });
         }
     }
@@ -492,6 +493,7 @@ fn load_knowledge_group(file: &clawhdf5::File) -> Result<KnowledgeCache, MemoryE
                 relation: rel_types[i].clone(),
                 weight: rel_weights[i],
                 ts: rel_ts[i],
+                ..Default::default()
             });
         }
     }

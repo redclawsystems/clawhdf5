@@ -105,6 +105,80 @@ fn normalize_scores(scores: &[(usize, f32)]) -> Vec<(usize, f32)> {
         .collect()
 }
 
+/// Perform hybrid search using Reciprocal Rank Fusion (RRF).
+///
+/// RRF combines rankings from multiple retrieval systems without requiring
+/// score normalization. Each result is scored as:
+///
+///   `score = Σ 1 / (k + rank_i)`
+///
+/// where `k = 60` (standard constant that dampens the impact of high ranks)
+/// and `rank_i` is the 1-based rank of the document in retrieval system `i`.
+///
+/// Documents only present in one system still receive a partial score.
+///
+/// # Arguments
+///
+/// * `query_embedding` - The query vector for cosine similarity.
+/// * `query_text` - The query text for BM25 keyword search.
+/// * `vectors` - All stored embedding vectors.
+/// * `_chunks` - All stored text chunks (parallel to `vectors`).
+/// * `tombstones` - Tombstone flags (non-zero = deleted).
+/// * `bm25_index` - Pre-built BM25 index.
+/// * `k` - Number of top results to return.
+#[allow(clippy::too_many_arguments)]
+pub fn rrf_hybrid_search(
+    query_embedding: &[f32],
+    query_text: &str,
+    vectors: &[Vec<f32>],
+    _chunks: &[String],
+    tombstones: &[u8],
+    bm25_index: &BM25Index,
+    k: usize,
+) -> Vec<(usize, f32)> {
+    const RRF_K: f32 = 60.0;
+
+    // Retrieve all results from both systems sorted descending by score.
+    let mut vec_scores = {
+        #[cfg(feature = "parallel")]
+        {
+            if vectors.len() > 10_000 {
+                vector_search::parallel_cosine_batch(
+                    query_embedding, vectors, tombstones, vectors.len(),
+                )
+            } else {
+                vector_search::cosine_similarity_batch(query_embedding, vectors, tombstones)
+            }
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            vector_search::cosine_similarity_batch(query_embedding, vectors, tombstones)
+        }
+    };
+    let mut kw_scores = bm25_index.search(query_text, vectors.len());
+
+    // Sort both lists descending so rank 1 = best.
+    vec_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    kw_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Accumulate RRF scores.
+    let mut rrf_scores: HashMap<usize, f32> = HashMap::new();
+
+    for (rank, (idx, _score)) in vec_scores.iter().enumerate() {
+        let rrf = 1.0 / (RRF_K + (rank + 1) as f32);
+        *rrf_scores.entry(*idx).or_insert(0.0) += rrf;
+    }
+    for (rank, (idx, _score)) in kw_scores.iter().enumerate() {
+        let rrf = 1.0 / (RRF_K + (rank + 1) as f32);
+        *rrf_scores.entry(*idx).or_insert(0.0) += rrf;
+    }
+
+    let mut results: Vec<(usize, f32)> = rrf_scores.into_iter().collect();
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    results.truncate(k);
+    results
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,5 +343,126 @@ mod tests {
         );
 
         assert!(results.len() <= 2);
+    }
+
+    // --- RRF tests ---
+
+    #[test]
+    fn rrf_vector_dominant_query() {
+        let (vectors, chunks, tombstones, bm25) = make_test_data();
+        let query_emb = vec![1.0, 0.0, 0.0]; // strong match on doc 0
+
+        let results = rrf_hybrid_search(
+            &query_emb,
+            "nonexistent_xyz",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            4,
+        );
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].0, 0, "doc 0 should top RRF for x-direction query");
+    }
+
+    #[test]
+    fn rrf_keyword_dominant_query() {
+        let (vectors, chunks, tombstones, bm25) = make_test_data();
+        let query_emb = vec![0.0, 0.0, 0.0];
+
+        let results = rrf_hybrid_search(
+            &query_emb,
+            "rust programming",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            4,
+        );
+
+        assert!(!results.is_empty());
+        assert_eq!(results[0].0, 0, "doc 0 should top RRF for rust programming query");
+    }
+
+    #[test]
+    fn rrf_respects_k_limit() {
+        let (vectors, chunks, tombstones, bm25) = make_test_data();
+        let query_emb = vec![0.5, 0.5, 0.0];
+
+        let results = rrf_hybrid_search(
+            &query_emb,
+            "language",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            2,
+        );
+
+        assert!(results.len() <= 2);
+    }
+
+    #[test]
+    fn rrf_scores_are_positive() {
+        let (vectors, chunks, tombstones, bm25) = make_test_data();
+        let query_emb = vec![0.5, 0.5, 0.0];
+
+        let results = rrf_hybrid_search(
+            &query_emb,
+            "rust",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            4,
+        );
+
+        for (_, score) in &results {
+            assert!(*score > 0.0, "RRF scores must be positive");
+        }
+    }
+
+    #[test]
+    fn rrf_empty_data() {
+        let vectors: Vec<Vec<f32>> = Vec::new();
+        let chunks: Vec<String> = Vec::new();
+        let tombstones: Vec<u8> = Vec::new();
+        let bm25 = BM25Index::build(&chunks, &tombstones);
+
+        let results = rrf_hybrid_search(
+            &[],
+            "anything",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            10,
+        );
+
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn rrf_scores_sorted_descending() {
+        let (vectors, chunks, tombstones, bm25) = make_test_data();
+        let query_emb = vec![0.7, 0.3, 0.0];
+
+        let results = rrf_hybrid_search(
+            &query_emb,
+            "rust language",
+            &vectors,
+            &chunks,
+            &tombstones,
+            &bm25,
+            4,
+        );
+
+        for window in results.windows(2) {
+            assert!(
+                window[0].1 >= window[1].1,
+                "RRF results must be sorted descending"
+            );
+        }
     }
 }

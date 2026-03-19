@@ -81,7 +81,8 @@ fn bench_core_scaling(c: &mut Criterion) {
     // Control thread count via RAYON_NUM_THREADS env var.
     for cores in [1, 2, 4, 8, 16, 24, 32, 48] {
         group.bench_with_input(BenchmarkId::new("lanes", cores), &cores, |b, &cores| {
-            std::env::set_var("RAYON_NUM_THREADS", cores.to_string());
+            // SAFETY: benchmark-only code; single-threaded setup phase, no concurrent env access.
+            unsafe { std::env::set_var("RAYON_NUM_THREADS", cores.to_string()) };
             // Force rayon to reinitialize — this only works for the first call.
             // For accurate per-iteration control, we set it before the group.
             b.iter(|| read_dataset(&bytes))

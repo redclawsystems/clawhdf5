@@ -229,7 +229,7 @@ mod tests {
     use crate::signature;
 
     fn extract_dataset(
-        file_data: &[u8],
+        _file_data: &[u8],
         hdr: &ObjectHeader,
         offset_size: u8,
         length_size: u8,

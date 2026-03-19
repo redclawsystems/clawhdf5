@@ -3,6 +3,8 @@
 //! Run with specific features:
 //!   cargo bench -p clawhdf5-filters --features lz4,zstd --bench compression_bench
 
+#![allow(unexpected_cfgs)]
+
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 /// Generate test data simulating 1M f64 values with a sin() pattern.
@@ -68,10 +70,11 @@ fn bench_parallel_deflate(c: &mut Criterion) {
     c.bench_function("deflate_sequential_10chunks", |b| {
         b.iter(|| {
             let refs: Vec<&[u8]> = chunks.iter().map(|c| c.as_slice()).collect();
-            clawhdf5_filters::compress_chunks(black_box(&refs), |data| {
-                clawhdf5_filters::deflate_compress(data, 6)
-            })
-            .unwrap()
+            black_box(&refs)
+                .iter()
+                .map(|data| clawhdf5_filters::deflate_compress(data, 6))
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
         })
     });
 }

@@ -20,14 +20,17 @@ pub mod vector_search;
 
 pub mod agents_md;
 pub mod cache;
+pub mod confidence;
 pub mod decision_gate;
 pub mod knowledge;
 pub mod memory_strategy;
+pub mod reranker;
 pub mod schema;
 pub mod search;
 pub mod session;
 pub mod storage;
 pub mod wal;
+pub mod consolidation;
 
 /// Cosine similarity with pre-computed norms using clawhdf5_accel primitives.
 ///
