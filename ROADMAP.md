@@ -58,32 +58,32 @@
 ---
 
 ## Track 4: Temporal Reasoning
-**Status:** 🔴 Not Started
+**Status:** 🟢 Phase 1 Complete
 **Priority:** High
 **Crate:** `clawhdf5-agent`
 
-- [ ] **4.1** Temporal index — timestamp-based B-tree/sorted index over memory records
-- [ ] **4.2** Time-range queries — "what happened between X and Y"
-- [ ] **4.3** Session DAG — link sessions with parent/child/continuation relationships
-- [ ] **4.4** Temporal re-ranking — boost recent memories, handle "latest" / "first" queries
-- [ ] **4.5** Temporal entity tracking — track entity state changes over time
-- [ ] **4.6** Tests + temporal reasoning benchmarks
+- [x] **4.1** Temporal index — sorted timestamp index with binary search, insert/remove
+- [x] **4.2** Time-range queries — range_query, before, after, latest, earliest
+- [x] **4.3** Session DAG — parent/child linking, chain walking, time-range overlap queries
+- [x] **4.4** Temporal re-ranking — query hint enum (Latest/Earliest/Around/Between/None) with boost scoring
+- [x] **4.5** Temporal entity tracking — EntityTimeline with state change history + point-in-time reconstruction
+- [x] **4.6** Tests — comprehensive tests for all features
 
 **Research:** MemX temporal gaps (≤43.6% Hit@5), MemoryArena multi-session tasks (2026)
 
 ---
 
 ## Track 5: Memory Security & Provenance
-**Status:** 🟡 Partial (HDF5 has SHINES provenance)
+**Status:** 🟢 Phase 1 Complete
 **Priority:** Medium-High
-**Crate:** `clawhdf5-agent` + `clawhdf5-format`
+**Crate:** `clawhdf5-agent`
 
-- [ ] **5.1** Source attribution — every memory record tags its source (user, system, tool, retrieval)
-- [ ] **5.2** Write anomaly detection — flag unusual memory write patterns
-- [ ] **5.3** Source isolation — separate user-provided memories from system-derived ones
-- [ ] **5.4** Memory integrity verification — periodic hash checks on memory datasets
-- [ ] **5.5** Poisoning resistance — validate retrieved memories against provenance before use
-- [ ] **5.6** Tests + adversarial memory injection tests
+- [x] **5.1** Source attribution — MemoryProvenance with source, creator, session, FNV-1a content hash
+- [x] **5.2** Write anomaly detection — rate limiting, 15 injection patterns, source distribution analysis
+- [x] **5.3** Source isolation — per-MemorySource sub-stores preventing cross-contamination
+- [x] **5.4** Memory integrity verification — content hash comparison via verify_integrity()
+- [x] **5.5** Poisoning resistance — pattern detection for prompt injection attempts
+- [x] **5.6** Tests — comprehensive tests including adversarial patterns
 
 **Research:** MemoryGraft (2025), SSGM Framework (2026)
 
