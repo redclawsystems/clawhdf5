@@ -106,31 +106,31 @@
 ---
 
 ## Track 7: OpenClaw Integration
-**Status:** 🔴 Not Started
+**Status:** 🟢 Phase 1 Complete
 **Priority:** Critical (for adoption)
-**Crate:** new `clawhdf5-openclaw` or integration in zeroclaw
+**Crate:** `clawhdf5-agent`
 
-- [ ] **7.1** Memory backend trait — implement OpenClaw's memory interface with clawhdf5
-- [ ] **7.2** Replace sqlite-vec — clawhdf5 vector search as drop-in replacement
-- [ ] **7.3** Markdown import/export — bidirectional sync between .md files and .brain HDF5
-- [ ] **7.4** memory_search tool — backed by clawhdf5 hybrid retrieval pipeline
-- [ ] **7.5** memory_get tool — read specific memory records from HDF5
+- [x] **7.1** Memory backend trait — MemoryBackend with search/get/write/ingest/export/stats
+- [x] **7.2** Hybrid retrieval pipeline — ClawhdfBackend wires RRF → reranker → confidence rejection
+- [x] **7.3** Markdown import/export — MarkdownParser + MarkdownExporter with line tracking + metadata
+- [x] **7.4** memory_search tool — backed by full hybrid retrieval pipeline
+- [x] **7.5** memory_get tool — get() with path + line range support
 - [ ] **7.6** Compaction integration — clawhdf5 consolidation hooks into OpenClaw session compaction
 - [ ] **7.7** Config surface — `memory.backend = "clawhdf5"` in openclaw.json
 - [ ] **7.8** Documentation + migration guide
 
-**Dependency:** Tracks 1-4 should be substantially complete first
+**Phase 1 done. Phase 2 needs OpenClaw-side TypeScript/Node bridge.**
 
 ---
 
 ## Track 8: Benchmarking & Validation
-**Status:** 🔴 Not Started
+**Status:** 🟢 Phase 1 Complete
 **Priority:** High
-**Crate:** workspace-level benchmarks
+**Crate:** `clawhdf5-agent`
 
 - [ ] **8.1** MemoryArena benchmark — run against Choi/Pentland's multi-session eval
 - [ ] **8.2** LongMemEval benchmark — compare against MemX's numbers
-- [ ] **8.3** Latency benchmarks — search latency at 1K, 10K, 100K, 1M records
+- [x] **8.3** Latency benchmarks — vector search at 1K/10K/100K, hybrid/RRF, graph traversal, consolidation, temporal
 - [ ] **8.4** Memory footprint — measure HDF5 file size vs record count
 - [ ] **8.5** Consolidation efficiency — measure retrieval quality before/after consolidation
 - [ ] **8.6** Cross-platform benchmarks — x86, ARM, Android, WASM
