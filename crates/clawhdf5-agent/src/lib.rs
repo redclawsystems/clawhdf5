@@ -31,6 +31,7 @@ pub mod session;
 pub mod storage;
 pub mod wal;
 pub mod consolidation;
+pub mod multimodal;
 pub mod temporal;
 pub mod provenance;
 pub mod anomaly;
