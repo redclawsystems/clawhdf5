@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use clawhdf5_agent::{AgentMemory, HDF5Memory, MemoryConfig, MemoryEntry};
 
-/// EdgeHDF5 — HDF5-backed cognitive memory for AI agents
+/// ClawhDF5 — HDF5-backed cognitive memory for AI agents
 #[derive(Parser)]
-#[command(name = "edgehdf5", version, about)]
+#[command(name = "clawhdf5", version, about)]
 struct Cli {
     /// Path to the .h5 memory file
-    #[arg(short, long, env = "EDGEHDF5_PATH")]
+    #[arg(short, long, env = "CLAWHDF5_PATH")]
     path: PathBuf,
 
     #[command(subcommand)]

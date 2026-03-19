@@ -12,6 +12,8 @@ ClawhDF5 is a pure-Rust HDF5 implementation combined with a research-grade agent
 cargo add clawhdf5-agent --features agent
 ```
 
+> **New here?** Start with the **[Quickstart Guide](docs/QUICKSTART.md)** · See **[Use Cases](docs/USE_CASES.md)** · Read **[Benchmarks](BENCHMARKS.md)**
+
 ---
 
 ## Why ClawhDF5?
