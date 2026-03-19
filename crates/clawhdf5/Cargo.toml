@@ -31,9 +31,9 @@ harness = false
 
 [features]
 default = ["mmap", "fast-deflate"]
-mmap = ["rustyhdf5-io/mmap"]
-parallel = ["rustyhdf5-format/parallel", "rayon"]
-fast-deflate = ["rustyhdf5-format/fast-deflate"]
+mmap = ["clawhdf5-io/mmap"]
+parallel = ["clawhdf5-format/parallel", "rayon"]
+fast-deflate = ["clawhdf5-format/fast-deflate"]
 apple-compression = []
 
 [package.metadata.docs.rs]
