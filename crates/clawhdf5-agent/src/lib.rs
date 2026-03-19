@@ -31,6 +31,9 @@ pub mod session;
 pub mod storage;
 pub mod wal;
 pub mod consolidation;
+pub mod temporal;
+pub mod provenance;
+pub mod anomaly;
 
 /// Cosine similarity with pre-computed norms using clawhdf5_accel primitives.
 ///
