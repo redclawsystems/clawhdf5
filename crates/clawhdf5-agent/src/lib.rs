@@ -35,6 +35,7 @@ pub mod multimodal;
 pub mod temporal;
 pub mod provenance;
 pub mod anomaly;
+pub mod openclaw;
 
 /// Cosine similarity with pre-computed norms using clawhdf5_accel primitives.
 ///
