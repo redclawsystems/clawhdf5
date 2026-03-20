@@ -423,6 +423,87 @@ impl ClawhdfBackend {
             })
             .collect()
     }
+
+    // ── Compaction & Consolidation hooks (7.6) ────────────────────────────
+
+    /// Run a compaction cycle — called by OpenClaw during session compaction.
+    ///
+    /// Sequence:
+    /// 1. `tick_session()` — apply Hebbian decay to all activation weights.
+    /// 2. `compact()` — remove tombstoned entries, returning the count removed.
+    /// 3. `flush_wal()` — merge any pending WAL entries to the .h5 file.
+    ///
+    /// Returns `(decayed, compacted, wal_flushed)`.
+    pub fn run_compaction(&mut self) -> Result<(bool, usize, bool), String> {
+        self.memory.tick_session().map_err(|e| e.to_string())?;
+        let compacted = AgentMemory::compact(&mut self.memory).map_err(|e| e.to_string())?;
+        self.memory.flush_wal().map_err(|e| e.to_string())?;
+        Ok((true, compacted, true))
+    }
+
+    /// Run the hippocampal consolidation engine over the currently stored records.
+    ///
+    /// Snapshots active cache entries into a [`crate::consolidation::ConsolidationEngine`]
+    /// and runs one consolidation cycle at time `now_secs` (Unix epoch seconds).
+    /// Returns per-tier counts and eviction/promotion totals.
+    pub fn run_consolidation(
+        &mut self,
+        now_secs: f64,
+    ) -> Result<crate::consolidation::ConsolidationStats, String> {
+        use crate::consolidation::{
+            ConsolidationConfig, ConsolidationEngine, ConsolidationStats, MemoryRecord,
+            MemorySource, MemoryTier,
+        };
+
+        let cache = &self.memory.cache;
+        let mut engine = ConsolidationEngine {
+            config: ConsolidationConfig::default(),
+            records: Vec::with_capacity(cache.chunks.len()),
+            next_id: 0,
+            stats: ConsolidationStats::default(),
+        };
+
+        for i in 0..cache.chunks.len() {
+            if cache.tombstones[i] != 0 {
+                continue;
+            }
+            let record = MemoryRecord {
+                id: i as u64,
+                chunk: cache.chunks[i].clone(),
+                embedding: cache.embeddings[i].clone(),
+                tier: MemoryTier::Working,
+                importance: cache.activation_weights[i],
+                access_count: 0,
+                last_accessed: now_secs,
+                created_at: cache.timestamps[i],
+                source: MemorySource::System,
+            };
+            engine.records.push(record);
+            engine.next_id = engine.next_id.max(i as u64 + 1);
+        }
+
+        engine.consolidate(now_secs);
+        Ok(engine.get_stats())
+    }
+
+    /// Apply one Hebbian decay tick to all activation weights and flush.
+    ///
+    /// Delegates to [`crate::HDF5Memory::tick_session`].
+    pub fn tick_session(&mut self) -> Result<(), String> {
+        self.memory.tick_session().map_err(|e| e.to_string())
+    }
+
+    /// Force a WAL merge: flush the .h5 file and truncate the WAL log.
+    ///
+    /// Delegates to [`crate::HDF5Memory::flush_wal`].
+    pub fn flush_wal(&mut self) -> Result<(), String> {
+        self.memory.flush_wal().map_err(|e| e.to_string())
+    }
+
+    /// Number of pending WAL entries (0 if WAL is disabled).
+    pub fn wal_pending_count(&self) -> usize {
+        self.memory.wal_pending_count()
+    }
 }
 
 impl MemoryBackend for ClawhdfBackend {

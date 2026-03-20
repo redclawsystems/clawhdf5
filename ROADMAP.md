@@ -106,20 +106,20 @@
 ---
 
 ## Track 7: OpenClaw Integration
-**Status:** 🟢 Phase 1 Complete
+**Status:** 🟢 Complete
 **Priority:** Critical (for adoption)
-**Crate:** `clawhdf5-agent`
+**Crates:** `clawhdf5-agent`, `clawhdf5-napi`
 
 - [x] **7.1** Memory backend trait — MemoryBackend with search/get/write/ingest/export/stats
 - [x] **7.2** Hybrid retrieval pipeline — ClawhdfBackend wires RRF → reranker → confidence rejection
 - [x] **7.3** Markdown import/export — MarkdownParser + MarkdownExporter with line tracking + metadata
 - [x] **7.4** memory_search tool — backed by full hybrid retrieval pipeline
 - [x] **7.5** memory_get tool — get() with path + line range support
-- [ ] **7.6** Compaction integration — clawhdf5 consolidation hooks into OpenClaw session compaction
-- [ ] **7.7** Config surface — `memory.backend = "clawhdf5"` in openclaw.json
-- [ ] **7.8** Documentation + migration guide
+- [x] **7.6** Compaction integration — run_compaction() (decay + compact + WAL flush), run_consolidation() (hippocampal engine), tick_session(), flush_wal()
+- [x] **7.7** Config surface — `memory.backend = "clawhdf5"` schema documented in docs/openclaw-config.md
+- [x] **7.8** Documentation + migration guide — docs/migration-guide.md, docs/openclaw-integration.md (architecture, full API reference, code patterns)
 
-**Phase 1 done. Phase 2 needs OpenClaw-side TypeScript/Node bridge.**
+**Node.js bridge:** `clawhdf5-napi` (napi-rs) → `@redclaw/clawhdf5` npm package with full TypeScript types.
 
 ---
 

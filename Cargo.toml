@@ -15,6 +15,7 @@ members = [
     "crates/clawhdf5-migrate",
     "crates/clawhdf5-android",
     "crates/clawhdf5-cli",
+    "crates/clawhdf5-napi",
 ]
 resolver = "2"
 
