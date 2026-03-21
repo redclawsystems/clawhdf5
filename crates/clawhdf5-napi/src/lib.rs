@@ -57,6 +57,25 @@ pub struct BackendStats {
     pub last_updated: Option<f64>,
 }
 
+/// Statistics for the ephemeral (in-memory only) working memory tier.
+#[napi(object)]
+pub struct EphemeralStatsJs {
+    /// Number of entries currently stored.
+    pub total_entries: u32,
+    /// Total bytes used by stored values.
+    pub total_bytes: f64,
+    /// Number of entries removed by TTL expiry in the last cleanup.
+    pub expired_count: u32,
+    /// Number of entries evicted for capacity since the store was created.
+    pub evicted_count: u32,
+    /// Age in seconds of the oldest entry.
+    pub oldest_entry_age_secs: f64,
+    /// Total successful get calls.
+    pub hit_count: f64,
+    /// Total failed get calls (absent or expired).
+    pub miss_count: f64,
+}
+
 /// Per-tier counts and running totals from one consolidation cycle.
 #[napi(object)]
 pub struct ConsolidationStats {
@@ -270,5 +289,80 @@ impl ClawhdfMemory {
     #[napi]
     pub fn wal_pending_count(&self) -> u32 {
         self.inner.wal_pending_count() as u32
+    }
+
+    // ── Ephemeral tier ────────────────────────────────────────────────────────
+
+    /// Enable the ephemeral (in-memory only) working memory tier.
+    ///
+    /// `maxEntries` caps capacity before eviction (default 10 000).
+    /// `defaultTtlSecs` sets the TTL applied when callers do not supply one
+    /// (default 3600 s = 1 hour).
+    #[napi]
+    pub fn enable_ephemeral(
+        &mut self,
+        max_entries: Option<u32>,
+        default_ttl_secs: Option<f64>,
+    ) {
+        use clawhdf5_agent::ephemeral::EphemeralConfig;
+        let config = EphemeralConfig {
+            max_entries: max_entries.unwrap_or(10_000) as usize,
+            default_ttl_secs: default_ttl_secs.unwrap_or(3600.0),
+            track_access: true,
+        };
+        self.inner.enable_ephemeral(config);
+    }
+
+    /// Store a text value in ephemeral memory (never persisted to disk).
+    ///
+    /// `ttlSecs` overrides the store-level default TTL; `null` uses the
+    /// default configured when `enableEphemeral` was called.
+    #[napi]
+    pub fn ephemeral_set(&mut self, key: String, value: String, ttl_secs: Option<f64>) {
+        let _ = self.inner.ephemeral_set(&key, &value, ttl_secs);
+    }
+
+    /// Retrieve a value from ephemeral memory.
+    ///
+    /// Returns `null` if the tier is disabled, the key is absent, or the
+    /// entry has expired.
+    #[napi]
+    pub fn ephemeral_get(&mut self, key: String) -> Option<String> {
+        self.inner.ephemeral_get(&key)
+    }
+
+    /// Delete a key from ephemeral memory.
+    ///
+    /// Returns `true` if the key existed and was removed.
+    #[napi]
+    pub fn ephemeral_delete(&mut self, key: String) -> bool {
+        self.inner.ephemeral_delete(&key)
+    }
+
+    /// Return statistics for the ephemeral tier, or `null` if not enabled.
+    #[napi]
+    pub fn ephemeral_stats(&self) -> Option<EphemeralStatsJs> {
+        self.inner.ephemeral_stats().map(|s| EphemeralStatsJs {
+            total_entries: s.total_entries as u32,
+            total_bytes: s.total_bytes as f64,
+            expired_count: s.expired_count as u32,
+            evicted_count: s.evicted_count as u32,
+            oldest_entry_age_secs: s.oldest_entry_age_secs,
+            hit_count: s.hit_count as f64,
+            miss_count: s.miss_count as f64,
+        })
+    }
+
+    /// Promote frequently-accessed ephemeral entries to persistent HDF5 storage.
+    ///
+    /// `minAccessCount` is the minimum number of times an entry must have been
+    /// retrieved before it is eligible for promotion (default 3).
+    /// Returns the number of entries promoted.
+    #[napi]
+    pub fn promote_ephemeral(&mut self, min_access_count: Option<u32>) -> napi::Result<u32> {
+        self.inner
+            .promote_ephemeral(min_access_count.unwrap_or(3))
+            .map(|n| n as u32)
+            .map_err(napi::Error::from_reason)
     }
 }

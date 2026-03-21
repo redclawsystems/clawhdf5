@@ -64,6 +64,24 @@ export interface BackendStats {
   lastUpdated?: number;
 }
 
+/** Statistics for the ephemeral in-memory working memory tier. */
+export interface EphemeralStats {
+  /** Number of entries currently stored. */
+  totalEntries: number;
+  /** Total bytes used by stored values. */
+  totalBytes: number;
+  /** Number of entries removed by TTL expiry in last cleanup. */
+  expiredCount: number;
+  /** Number of entries evicted for capacity in last cleanup. */
+  evictedCount: number;
+  /** Age in seconds of the oldest entry. */
+  oldestEntryAgeSecs: number;
+  /** Total successful gets. */
+  hitCount: number;
+  /** Total failed gets (not found or expired). */
+  missCount: number;
+}
+
 /** Per-tier counts and running totals from one consolidation cycle. */
 export interface ConsolidationStats {
   /** Records remaining in the Working tier. */
@@ -107,6 +125,16 @@ interface NativeConsolidationStats {
   total_promotions: number;
 }
 
+interface NativeEphemeralStats {
+  total_entries: number;
+  total_bytes: number;
+  expired_count: number;
+  evicted_count: number;
+  oldest_entry_age_secs: number;
+  hit_count: number;
+  miss_count: number;
+}
+
 interface NativeClawhdfMemory {
   search(queryText: string, queryEmbedding: Float32Array, k: number): NativeMemorySearchResult[];
   get(path: string, fromLine?: number, numLines?: number): string | null;
@@ -119,6 +147,12 @@ interface NativeClawhdfMemory {
   flushWal(): void;
   runConsolidation(nowSecs: number): NativeConsolidationStats;
   walPendingCount(): number;
+  enableEphemeral(maxEntries?: number, defaultTtlSecs?: number): void;
+  ephemeralSet(key: string, value: string, ttlSecs?: number): void;
+  ephemeralGet(key: string): string | null;
+  ephemeralDelete(key: string): boolean;
+  ephemeralStats(): NativeEphemeralStats | null;
+  promoteEphemeral(minAccessCount?: number): number;
 }
 
 interface NativeModule {
@@ -306,5 +340,73 @@ export class ClawhdfMemory {
    */
   walPendingCount(): number {
     return this._inner.walPendingCount();
+  }
+
+  // ── Ephemeral tier ──────────────────────────────────────────────────────────
+
+  /**
+   * Enable the ephemeral (in-memory only) working memory tier.
+   *
+   * @param maxEntries     Capacity before LFU eviction (default 10 000).
+   * @param defaultTtlSecs Default TTL in seconds (default 3600).
+   */
+  enableEphemeral(maxEntries?: number, defaultTtlSecs?: number): void {
+    this._inner.enableEphemeral(maxEntries, defaultTtlSecs);
+  }
+
+  /**
+   * Store a value in ephemeral memory. Never written to disk.
+   *
+   * @param key     Lookup key.
+   * @param value   String value to store.
+   * @param ttlSecs Optional TTL override in seconds.
+   */
+  ephemeralSet(key: string, value: string, ttlSecs?: number): void {
+    this._inner.ephemeralSet(key, value, ttlSecs);
+  }
+
+  /**
+   * Retrieve a value from ephemeral memory.
+   *
+   * @returns The stored string, or `null` if absent / expired / tier disabled.
+   */
+  ephemeralGet(key: string): string | null {
+    return this._inner.ephemeralGet(key);
+  }
+
+  /**
+   * Delete a key from ephemeral memory.
+   *
+   * @returns `true` if the key existed and was removed.
+   */
+  ephemeralDelete(key: string): boolean {
+    return this._inner.ephemeralDelete(key);
+  }
+
+  /**
+   * Return statistics for the ephemeral tier, or `null` if not enabled.
+   */
+  ephemeralStats(): EphemeralStats | null {
+    const s = this._inner.ephemeralStats();
+    if (!s) return null;
+    return {
+      totalEntries: s.total_entries,
+      totalBytes: s.total_bytes,
+      expiredCount: s.expired_count,
+      evictedCount: s.evicted_count,
+      oldestEntryAgeSecs: s.oldest_entry_age_secs,
+      hitCount: s.hit_count,
+      missCount: s.miss_count,
+    };
+  }
+
+  /**
+   * Promote frequently-accessed ephemeral entries to persistent HDF5 storage.
+   *
+   * @param minAccessCount Minimum access count to qualify (default 3).
+   * @returns              Number of entries promoted.
+   */
+  promoteEphemeral(minAccessCount?: number): number {
+    return this._inner.promoteEphemeral(minAccessCount);
   }
 }

@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use tempfile::TempDir;
 use clawhdf5_agent::bm25::BM25Index;
 use clawhdf5_agent::consolidation::{
     ConsolidationConfig, ConsolidationEngine, ImportanceScorer, ImportanceWeights, MemorySource,
@@ -7,6 +8,7 @@ use clawhdf5_agent::hybrid::{hybrid_search, rrf_hybrid_search};
 use clawhdf5_agent::knowledge::KnowledgeCache;
 use clawhdf5_agent::temporal::TemporalIndex;
 use clawhdf5_agent::vector_search;
+use clawhdf5_agent::{AgentMemory, HDF5Memory, MemoryConfig, MemoryEntry};
 
 // ---------------------------------------------------------------------------
 // Simple deterministic PRNG (LCG)
@@ -339,6 +341,116 @@ fn temporal_benches(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
+// HDF5 write-scale benchmarks (Track 8.4 — memory footprint)
+// ---------------------------------------------------------------------------
+//
+// Measures batch write throughput at 100, 1K, and 10K records.
+// Actual file sizes are reported by the standalone `footprint_bench` binary.
+//
+// # WASM Note (cfg target_arch = "wasm32")
+// These benchmarks require std filesystem access (HDF5 on-disk format).
+// For wasm32 targets:
+//   - HDF5Memory would need an in-memory or IndexedDB-backed storage layer.
+//   - `TempDir` would be replaced by a virtual FS.
+//   - `criterion` is not available on wasm32; use `console_error_panic_hook`
+//     + manual timing via `web_sys::Performance` instead.
+// The #[cfg(target_arch = "wasm32")] guard is not applied here because the
+// entire bench harness is excluded from wasm32 builds by the `harness = false`
+// Cargo configuration.
+
+fn make_bench_entry(idx: usize, dim: usize) -> MemoryEntry {
+    let mut rng = Rng::new(idx as u32 + 7777);
+    MemoryEntry {
+        chunk: make_text(&mut rng, 30),
+        embedding: make_vec(&mut rng, dim),
+        source_channel: "footprint-bench".to_string(),
+        timestamp: 1_000_000.0 + idx as f64,
+        session_id: format!("sess_{}", idx / 50),
+        tags: String::new(),
+    }
+}
+
+fn hdf5_write_scale_benches(c: &mut Criterion) {
+    const DIM: usize = 384;
+
+    let mut group = c.benchmark_group("hdf5_write_scale");
+    group.sample_size(10); // fewer samples — these involve disk I/O
+
+    for (label, n) in [("100", 100usize), ("1k", 1_000), ("10k", 10_000)] {
+        let entries: Vec<MemoryEntry> = (0..n).map(|i| make_bench_entry(i, DIM)).collect();
+
+        group.bench_with_input(
+            BenchmarkId::new("batch_write", label),
+            &n,
+            |b, _| {
+                b.iter_batched(
+                    || {
+                        let dir = TempDir::new().expect("TempDir");
+                        let mut cfg =
+                            MemoryConfig::new(dir.path().join("w.h5"), "bench", DIM);
+                        cfg.wal_enabled = false;
+                        cfg.compact_threshold = 0.0;
+                        let mem = HDF5Memory::create(cfg).expect("HDF5Memory");
+                        (dir, mem, entries.clone())
+                    },
+                    |(dir, mut mem, e)| {
+                        mem.save_batch(e).expect("save_batch");
+                        // Keep dir alive so the file isn't deleted during measurement
+                        std::hint::black_box(dir);
+                    },
+                    criterion::BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
+// Large-scale consolidation benchmarks (Track 8.5 extension)
+// ---------------------------------------------------------------------------
+
+fn large_consolidation_benches(c: &mut Criterion) {
+    const DIM: usize = 384;
+
+    let mut group = c.benchmark_group("consolidation_large");
+    group.sample_size(10);
+
+    for (label, n) in [("10k", 10_000usize)] {
+        group.bench_with_input(
+            BenchmarkId::new("bench_consolidation_cycle", label),
+            &n,
+            |b, &n| {
+                b.iter_batched(
+                    || {
+                        let mut engine = ConsolidationEngine::new(ConsolidationConfig {
+                            working_capacity: n / 2,
+                            episodic_capacity: n * 20,
+                            ..ConsolidationConfig::default()
+                        });
+                        let mut rng = Rng::new(99);
+                        let now = 1_000_000.0f64;
+                        for i in 0..n {
+                            let embedding = make_vec(&mut rng, DIM);
+                            let chunk = format!("memory record {i} with content");
+                            engine.add_memory(chunk, embedding, MemorySource::User, now + i as f64);
+                        }
+                        engine
+                    },
+                    |mut engine| {
+                        engine.consolidate(2_000_000.0);
+                    },
+                    criterion::BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+
+    group.finish();
+}
+
+// ---------------------------------------------------------------------------
 // Criterion groups & main
 // ---------------------------------------------------------------------------
 
@@ -348,7 +460,9 @@ criterion_group!(
     hybrid_search_benches,
     knowledge_graph_benches,
     consolidation_benches,
+    large_consolidation_benches,
     temporal_benches,
+    hdf5_write_scale_benches,
 );
 
 criterion_main!(memory_benches);

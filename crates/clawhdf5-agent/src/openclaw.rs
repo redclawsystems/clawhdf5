@@ -1289,3 +1289,63 @@ mod tests {
         assert!(out.starts_with("# Title"));
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ephemeral tier methods on ClawhdfBackend
+// ─────────────────────────────────────────────────────────────────────────────
+
+impl ClawhdfBackend {
+    /// Enable the ephemeral (in-memory only) working memory tier.
+    pub fn enable_ephemeral(&mut self, config: crate::ephemeral::EphemeralConfig) {
+        self.memory.enable_ephemeral(config);
+    }
+
+    /// Store a text value in ephemeral memory.
+    ///
+    /// Returns an error string if the ephemeral tier has not been enabled.
+    pub fn ephemeral_set(
+        &mut self,
+        key: &str,
+        value: &str,
+        ttl_secs: Option<f64>,
+    ) -> Result<(), String> {
+        match self.memory.ephemeral_mut() {
+            Some(s) => {
+                s.set_text(key, value, ttl_secs);
+                Ok(())
+            }
+            None => Err("ephemeral tier not enabled".to_string()),
+        }
+    }
+
+    /// Retrieve a text value from ephemeral memory.
+    ///
+    /// Returns `None` if the tier is disabled, the key is absent, or the
+    /// entry has expired.
+    pub fn ephemeral_get(&mut self, key: &str) -> Option<String> {
+        self.memory.ephemeral_mut()?.get_text(key).map(|s| s.to_string())
+    }
+
+    /// Delete a key from ephemeral memory.
+    ///
+    /// Returns `true` if the key existed and was removed.
+    pub fn ephemeral_delete(&mut self, key: &str) -> bool {
+        self.memory.ephemeral_mut().map_or(false, |s| s.delete(key))
+    }
+
+    /// Return a snapshot of ephemeral tier statistics, or `None` if the tier
+    /// is not enabled.
+    pub fn ephemeral_stats(&self) -> Option<crate::ephemeral::EphemeralStats> {
+        self.memory.ephemeral().map(|s| s.stats())
+    }
+
+    /// Promote frequently-accessed ephemeral entries to persistent HDF5 storage.
+    ///
+    /// Entries with `access_count >= min_access_count` are moved from the
+    /// ephemeral store into the persistent cache.  Returns the count promoted.
+    pub fn promote_ephemeral(&mut self, min_access_count: u32) -> Result<usize, String> {
+        self.memory
+            .promote_ephemeral(min_access_count)
+            .map_err(|e| e.to_string())
+    }
+}

@@ -36,6 +36,7 @@ pub mod temporal;
 pub mod provenance;
 pub mod anomaly;
 pub mod openclaw;
+pub mod ephemeral;
 
 /// Cosine similarity with pre-computed norms using clawhdf5_accel primitives.
 ///
@@ -57,6 +58,11 @@ pub fn cosine_similarity_prenorm(
 use std::path::{Path, PathBuf};
 
 use cache::MemoryCache;
+use ephemeral::{EphemeralConfig, EphemeralStore};
+// EphemeralEntry and EphemeralStats are part of the crate public API via
+// the `ephemeral` module; they are not needed directly in lib.rs internals.
+#[allow(unused_imports)]
+pub use ephemeral::{EphemeralEntry, EphemeralStats};
 use knowledge::KnowledgeCache;
 use memory_strategy::{Exchange, MemoryStrategy, StrategyOutput};
 use session::SessionCache;
@@ -193,6 +199,7 @@ pub struct HDF5Memory {
     pub(crate) knowledge: KnowledgeCache,
     wal: Option<wal::WalFile>,
     strategy: Option<Box<dyn MemoryStrategy>>,
+    pub ephemeral: Option<EphemeralStore>,
 }
 
 impl std::fmt::Debug for HDF5Memory {
@@ -223,6 +230,7 @@ impl HDF5Memory {
             knowledge,
             wal,
             strategy: None,
+            ephemeral: None,
         })
     }
 
@@ -249,6 +257,7 @@ impl HDF5Memory {
             knowledge,
             wal,
             strategy: None,
+            ephemeral: None,
         })
     }
 
@@ -1252,3 +1261,130 @@ impl HDF5Memory {
         Ok(())
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ephemeral tier integration
+// ─────────────────────────────────────────────────────────────────────────────
+
+impl HDF5Memory {
+    /// Enable the ephemeral working memory tier with the given configuration.
+    pub fn enable_ephemeral(&mut self, config: EphemeralConfig) {
+        self.ephemeral = Some(EphemeralStore::new(config));
+    }
+
+    /// Return a shared reference to the ephemeral store, if enabled.
+    pub fn ephemeral(&self) -> Option<&EphemeralStore> {
+        self.ephemeral.as_ref()
+    }
+
+    /// Return a mutable reference to the ephemeral store, if enabled.
+    pub fn ephemeral_mut(&mut self) -> Option<&mut EphemeralStore> {
+        self.ephemeral.as_mut()
+    }
+
+    /// Promote frequently-accessed ephemeral entries into the persistent cache.
+    ///
+    /// Every entry whose `access_count >= min_access_count` is removed from the
+    /// ephemeral store and written to the HDF5 cache, then the file is flushed.
+    /// Returns the number of entries promoted.
+    pub fn promote_ephemeral(&mut self, min_access_count: u32) -> Result<usize> {
+        let candidates = match &self.ephemeral {
+            None => return Ok(0),
+            Some(s) => s.promotion_candidates(min_access_count),
+        };
+
+        if candidates.is_empty() {
+            return Ok(0);
+        }
+
+        let dim = self.config.embedding_dim;
+        let mut promoted = 0;
+
+        for key in candidates {
+            let entry = match self.ephemeral.as_mut().and_then(|s| s.take_for_promotion(&key)) {
+                Some(e) => e,
+                None => continue,
+            };
+
+            let chunk = entry
+                .text
+                .clone()
+                .unwrap_or_else(|| String::from_utf8_lossy(&entry.value).into_owned());
+            let embedding = entry.embedding.clone().unwrap_or_else(|| vec![0.0f32; dim]);
+
+            self.cache.push(
+                chunk,
+                embedding,
+                format!("ephemeral::{key}"),
+                entry.created_at,
+                String::new(),
+                entry.tags.join(","),
+            );
+            promoted += 1;
+        }
+
+        if promoted > 0 {
+            self.flush()?;
+        }
+        Ok(promoted)
+    }
+
+    /// Search both the persistent HDF5 tier and the ephemeral tier, returning
+    /// the top `k` results sorted by score descending.
+    ///
+    /// Ephemeral results are boosted by a factor of 1.2 to surface recent
+    /// in-context information above older persisted data.
+    pub fn unified_search(
+        &mut self,
+        query_embedding: &[f32],
+        query_text: &str,
+        k: usize,
+    ) -> Vec<SearchResult> {
+        // Persistent tier.
+        let persistent = self.hybrid_search(query_embedding, query_text, 0.7, 0.3, k);
+        const EPHEMERAL_BOOST: f32 = 1.2;
+        let mut results = persistent;
+
+        if self.ephemeral.is_none() {
+            return results;
+        }
+
+        let eph = self.ephemeral.as_mut().unwrap();
+
+        // Collect (key, score) pairs from ephemeral — borrow ends before we
+        // access entries again below.
+        let eph_hits: Vec<(String, f32)> = if !query_embedding.is_empty() {
+            eph.search_embedding(query_embedding, k)
+        } else if !query_text.is_empty() {
+            eph.search_text(query_text, k)
+        } else {
+            Vec::new()
+        };
+
+        for (key, score) in &eph_hits {
+            if let Some(entry) = eph.get_entry(key) {
+                let chunk = entry
+                    .text
+                    .clone()
+                    .unwrap_or_else(|| String::from_utf8_lossy(&entry.value).into_owned());
+                results.push(SearchResult {
+                    score: score * EPHEMERAL_BOOST,
+                    chunk,
+                    index: usize::MAX,
+                    timestamp: entry.created_at,
+                    source_channel: format!("ephemeral::{key}"),
+                    activation: 1.0,
+                });
+            }
+        }
+
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(k);
+        results
+    }
+}
+
