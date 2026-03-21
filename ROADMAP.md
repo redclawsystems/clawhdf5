@@ -12,7 +12,7 @@
 
 - [x] **1.1** Entity storage — entities with properties, embeddings, timestamps (created_at/updated_at)
 - [x] **1.2** Relation storage — typed edges with RelationType enum (Temporal/Causal/Associative/Hierarchical/Custom), metadata, timestamps
-- [ ] **1.3** Entity extraction helpers — extract entities from text chunks on save
+- [x] **1.3** Entity extraction helpers — rule-based extraction (Person, Org, Location, Date, Technology, Project) with extract_and_store_entities() integration
 - [x] **1.4** Entity resolution — fuzzy name matching (Levenshtein distance) via resolve_or_create()
 - [x] **1.5** Graph traversal queries — BFS neighbors with depth, subgraph extraction from seeds
 - [x] **1.6** Spreading activation — weighted activation propagation with configurable decay
@@ -48,10 +48,10 @@
 - [x] **3.1** Reciprocal Rank Fusion (RRF) — rrf_hybrid_search() with k=60 constant
 - [x] **3.2** Multi-factor re-ranking — temporal decay, source authority hierarchy, activation scores (reranker.rs)
 - [x] **3.3** Low-confidence rejection — min_score threshold, gap filtering, max_results (confidence.rs)
-- [ ] **3.4** Query expansion — generate related queries for broader recall
+- [x] **3.4** Query expansion — synonyms, acronyms, temporal rewrites, morphological variants, knowledge graph aliases + expanded_search() with RRF merge
 - [x] **3.5** Result explanation — ReRankResult with full score breakdown per factor
 - [x] **3.6** Configurable pipeline — ReRankConfig + ConfidenceConfig with tunable weights/thresholds
-- [ ] **3.7** Tests + MemX-comparable benchmarks
+- [x] **3.7** Tests + MemX-comparable benchmarks — 5 integration tests (Hit@1≥90%, search<500ms@100K, BM25<200ms@100K, hybrid<50ms@10K, compact<200ms@10K)
 
 **Research:** MemX (2026), SwiftMem (2026)
 

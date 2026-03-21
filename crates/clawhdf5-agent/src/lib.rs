@@ -37,6 +37,8 @@ pub mod provenance;
 pub mod anomaly;
 pub mod openclaw;
 pub mod ephemeral;
+pub mod entity_extract;
+pub mod query_expand;
 
 /// Cosine similarity with pre-computed norms using clawhdf5_accel primitives.
 ///
@@ -324,6 +326,33 @@ impl HDF5Memory {
         self.knowledge.add_relation(src, tgt, relation, weight);
         self.flush()?;
         Ok(())
+    }
+
+    /// Extract entities from a text chunk and add them to the knowledge graph.
+    ///
+    /// Runs `EntityExtractor::extract()` on `text`, then calls
+    /// `knowledge_cache.resolve_or_create()` for each extracted entity to find
+    /// or create the corresponding node.  Returns the list of
+    /// `(entity_id, extracted_entity)` pairs.
+    pub fn extract_and_store_entities(
+        &mut self,
+        text: &str,
+        config: Option<entity_extract::ExtractorConfig>,
+    ) -> Vec<(u64, entity_extract::ExtractedEntity)> {
+        let cfg = config.unwrap_or_default();
+        let extractor = entity_extract::EntityExtractor::new(cfg);
+        let entities = extractor.extract(text);
+        let mut result = Vec::with_capacity(entities.len());
+        for entity in entities {
+            let type_str = format!("{:?}", entity.entity_type).to_lowercase();
+            let (id, _created) =
+                self.knowledge
+                    .resolve_or_create(&entity.text, &type_str, -1, 1);
+            result.push((id, entity));
+        }
+        // Best-effort flush; ignore errors here so the method remains infallible.
+        let _ = self.flush();
+        result
     }
 }
 
