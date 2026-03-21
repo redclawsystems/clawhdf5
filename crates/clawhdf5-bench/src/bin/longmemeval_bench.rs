@@ -31,6 +31,37 @@ const EMBEDDING_DIM: usize = 384;
 // JSON data types
 // ---------------------------------------------------------------------------
 
+/// The `answer` field in LongMemEval can be a string or a number.
+fn deserialize_answer<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+    struct AnswerVisitor;
+    impl<'de> de::Visitor<'de> for AnswerVisitor {
+        type Value = String;
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("a string or number")
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+        fn visit_string<E: de::Error>(self, v: String) -> Result<String, E> {
+            Ok(v)
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+    }
+    deserializer.deserialize_any(AnswerVisitor)
+}
+
 #[derive(Deserialize)]
 struct Turn {
     #[allow(dead_code)]
@@ -47,6 +78,7 @@ struct Question {
     question_type: String,
     question: String,
     #[allow(dead_code)]
+    #[serde(deserialize_with = "deserialize_answer")]
     answer: String,
     #[allow(dead_code)]
     question_date: String,

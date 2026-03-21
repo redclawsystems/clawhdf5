@@ -21,6 +21,10 @@ path = "src/bin/footprint_bench.rs"
 name = "consolidation_efficiency"
 path = "src/bin/consolidation_efficiency.rs"
 
+[[bin]]
+name = "ephemeral_perf"
+path = "src/bin/ephemeral_perf.rs"
+
 [dependencies]
 clawhdf5-agent = { path = "../clawhdf5-agent" }
 serde = { version = "1", features = ["derive"] }

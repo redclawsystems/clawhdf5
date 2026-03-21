@@ -299,3 +299,13 @@ fn main() {
     println!("  Uncompressed: {}", fmt_bytes(r100k.file_bytes));
     println!("  Compressed:   {} ({:.1}x ratio)", fmt_bytes(r100k_comp.file_bytes), r100k_comp.compression_ratio());
 }
+
+
+// ---------------------------------------------------------------------------
+// Ephemeral tier microbenchmark
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod ephemeral_perf {
+    // placeholder — actual perf measured in main below
+}
